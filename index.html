@@ -145,7 +145,8 @@
   async function fetchBalance() {
     if (!user_id) return;
     try {
-      const res = await fetch(`https://backendd-wghh.onrender.com/get_balance?user_id=${user_id}`);
+      const res = await fetch(`https://tagi-f3yw.onrender.com/get_balance?user_id=${user_id}`);
+
       const data = await res.json();
       balance = data.balance;
       balanceDisplay.textContent = balance.toFixed(2);
@@ -228,7 +229,7 @@
       return;
     }
     try {
-      const res = await fetch("https://backendd-wghh.onrender.com/place_bet", {
+      const res = await fetch("https://tagi-f3yw.onrender.com/place_bet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id, bet })
@@ -251,7 +252,7 @@
   async function cashout() {
     if (!user_id || !isFlying || hasCashedOut || userBet <= 0) return;
     try {
-      const res = await fetch("https://backendd-wghh.onrender.com/cashout", {
+      const res = await fetch("https://tagi-f3yw.onrender.com/cashout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id, coefficient: coefficient.toFixed(2) })
