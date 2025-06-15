@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Aviator Mini App</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      background-color: #000;
+      width: 100%;
+      height: 100%;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+      color: #fff;
+    }
+
+    .game-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      height: 100%;
+      padding: 10px;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .balance {
+      font-size: 16px;
+    }
+
+    .history {
+      display: flex;
+      gap: 8px;
+    }
+
+    .history span {
+      font-size: 14px;
+      color: #0f0;
+    }
+
+    .flight-zone {
+      position: relative;
+      width: 90%;
+      height: 300px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px dashed #444;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .plane {
+      position: absolute;
+      width: 60px;
+      height: auto;
+      top: 120px;
+      left: 0;
+    }
+
+    .info-bar {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .coefficient {
+      font-size: 28px;
+      font-weight: bold;
+    }
+
+    .timer {
+      font-size: 18px;
+      color: #ccc;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .controls input {
+      width: 80px;
+      padding: 5px;
+    }
+
+    .controls button {
+      padding: 5px 12px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<div class="game-container">
+  <div class="top-bar">
+    <div class="balance">💰 Баланс: <span id="balance">...</span> TON</div>
+    <div class="history" id="history"></div>
+  </div>
+
+  <div class="flight-zone" id="flightZone">
+    <img src="https://www.freeiconspng.com/uploads/airplane-png-16.png" class="plane" id="plane" />
+  </div>
+
+  <div class="info-bar">
+    <div class="coefficient" id="coefficient">1.00x</div>
+    <div class="timer" id="timer">5</div>
+    <div class="controls">
+      <input type="number" id="betInput" placeholder="Ставка" />
+      <button onclick="placeBet()">Ставка</button>
+      <button onclick="cashout()">Кэшаут</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const tg = window.Telegram.WebApp;
+  const user_id = tg.initDataUnsafe?.user?.id || null;
+
+  const plane = document.getElementById("plane");
+  const coefficientDisplay = document.getElementById("coefficient");
+  const timerDisplay = document.getElementById("timer");
+  const balanceDisplay = document.getElementById("balance");
+  const betInput = document.getElementById("betInput");
+  const historyEl = document.getElementById("history");
+
+  let balance = 0;
+  let coefficient = 1.0;
+  let flightInterval;
+  let coefficientInterval;
+  let isFlying = false;
+  let isCrashed = false;
+  let userBet = 0;
+  let hasCashedOut = false;
+  let history = [];
+
+  async function fetchBalance() {
+    if (!user_id) return;
+    try {
+      const res = await fetch(`https://backendd-wghh.onrender.com/get_balance?user_id=${user_id}`);
+      const data = await res.json();
+      balance = data.balance;
+      balanceDisplay.textContent = balance.toFixed(2);
+    } catch (err) {
+      console.error("Баланс қатесі:", err);
+      balance = 0;
+      balanceDisplay.textContent = "0.00";
+    }
+  }
+
+  function updateHistory(value) {
+    history.unshift(value + "x");
+    if (history.length > 5) history.pop();
+    historyEl.innerHTML = history.map(h => `<span>${h}</span>`).join('');
+  }
+
+  function resetFlight() {
+    coefficient = 1.0;
+    isFlying = false;
+    isCrashed = false;
+    hasCashedOut = false;
+    plane.style.left = "0px";
+    plane.style.top = "120px";
+    coefficientDisplay.textContent = "1.00x";
+    startTimer(5);
+  }
+
+  function startTimer(seconds) {
+    let timeLeft = seconds;
+    timerDisplay.textContent = timeLeft;
+    const countdown = setInterval(() => {
+      timeLeft--;
+      timerDisplay.textContent = timeLeft;
+      if (timeLeft <= 0) {
+        clearInterval(countdown);
+        startFlight();
+      }
+    }, 1000);
+  }
+
+  function startFlight() {
+    isFlying = true;
+    let position = 0;
+    coefficientInterval = setInterval(() => {
+      if (!isCrashed) {
+        coefficient += 0.01;
+        coefficientDisplay.textContent = coefficient.toFixed(2) + "x";
+      }
+    }, 50);
+
+    flightInterval = setInterval(() => {
+      if (!isCrashed) {
+        position += 2;
+        plane.style.left = position + "px";
+        if (position > 250) plane.style.top = "110px";
+        if (coefficient >= Math.random() * 3 + 1.5) {
+          crash();
+        }
+      }
+    }, 16);
+  }
+
+  function crash() {
+    isCrashed = true;
+    clearInterval(coefficientInterval);
+    clearInterval(flightInterval);
+    coefficientDisplay.textContent = "💥 " + coefficient.toFixed(2) + "x";
+    if (!hasCashedOut && userBet > 0) {
+      userBet = 0;
+    }
+    updateHistory(coefficient.toFixed(2));
+    setTimeout(resetFlight, 3000);
+  }
+
+  async function placeBet() {
+    if (isFlying || isCrashed) return;
+    const bet = parseFloat(betInput.value);
+    if (!user_id || isNaN(bet) || bet <= 0 || bet > balance) {
+      alert("❌ Қате ставка");
+      return;
+    }
+    try {
+      const res = await fetch("https://backendd-wghh.onrender.com/place_bet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id, bet })
+      });
+      const data = await res.json();
+      if (data.success) {
+        userBet = bet;
+        balance = data.new_balance;
+        balanceDisplay.textContent = balance.toFixed(2);
+        alert("✅ Ставка қабылданды!");
+      } else {
+        alert("❌ Ставка қабылданбады: " + data.message);
+      }
+    } catch (err) {
+      console.error("Ставка қатесі:", err);
+      alert("❌ Сервер қатесі");
+    }
+  }
+
+  async function cashout() {
+    if (!user_id || !isFlying || hasCashedOut || userBet <= 0) return;
+    try {
+      const res = await fetch("https://backendd-wghh.onrender.com/cashout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id, coefficient: coefficient.toFixed(2) })
+      });
+      const data = await res.json();
+      if (data.success) {
+        balance = data.new_balance;
+        balanceDisplay.textContent = balance.toFixed(2);
+        alert(`💸 Кэшаут: ${data.win_amount.toFixed(2)} TON`);
+        hasCashedOut = true;
+        userBet = 0;
+      } else {
+        alert("❌ Кэшаут сәтсіз: " + data.message);
+      }
+    } catch (err) {
+      console.error("Кэшаут қатесі:", err);
+      alert("❌ Сервер қатесі");
+    }
+  }
+
+  fetchBalance().then(resetFlight);
+</script>
+</body>
+</html>
